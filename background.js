@@ -111,6 +111,9 @@ async function setToStorage(id, value) {
   let wasActive = new ObservedSet();
 
   function shouldDiscard(tab) {
+    // ignore privileged tabs (extensions, about:*)
+    if (tab.id < 0) return false;
+
     // ignore
     if (
       !(
@@ -184,9 +187,8 @@ async function setToStorage(id, value) {
         id: details.tabId,
         url: details.documentUrl || details.originUrl || details.url
       };
-      // FIXME: should verify we don't block requests that are not related to the tab
-      // e.g. requests from extensions
       if (shouldDiscard(tab)) {
+        console.debug(`blocking ${details.url}`);
         return wasActive.waitUntilHas(tab.id);
       }
     },
