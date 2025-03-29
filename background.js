@@ -186,6 +186,7 @@ async function setToStorage(id, value) {
       const tab = {
         id: details.tabId,
         url: details.documentUrl || details.originUrl || details.url
+        // FIXME: have to set current active tab as `active: true` at browser startup
       };
       if (shouldDiscard(tab)) {
         console.debug(`blocking ${details.url}`);
