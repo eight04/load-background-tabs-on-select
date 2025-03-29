@@ -12,14 +12,7 @@ async function setToStorage(id, value) {
 }
 
 (async () => {
-  const temporary = browser.runtime.id.endsWith("@temporary-addon"); // debugging?
-  const manifest = browser.runtime.getManifest();
-  const extname = manifest.name;
   let manually_disabled = false;
-
-  async function getMode() {
-    return await getFromStorage("boolean", "mode", false);
-  }
 
   async function getRegexList() {
     let out = [];
@@ -48,26 +41,24 @@ async function setToStorage(id, value) {
     return false;
   }
 
-  async function onStorageChange(/*changes, area*/) {
+  async function onStorageChange() {
     manually_disabled = await getFromStorage(
       "boolean",
       "manually_disabled",
-      false,
+      manually_disabled,
     );
-    if (!manually_disabled) {
-      //
-      browser.browserAction.setBadgeText({ text: "on" });
-      browser.browserAction.setBadgeBackgroundColor({
-        color: [0, 115, 0, 115],
-      });
-    } else {
-      //
+    if (manually_disabled) {
       browser.browserAction.setBadgeText({ text: "off" });
       browser.browserAction.setBadgeBackgroundColor({
         color: [115, 0, 0, 115],
       });
+    } else {
+      browser.browserAction.setBadgeText({ text: "on" });
+      browser.browserAction.setBadgeBackgroundColor({
+        color: [0, 115, 0, 115],
+      });
     }
-    mode = await getMode();
+    mode = await getFromStorage("boolean", "mode", false);
     regexList = await getRegexList();
   }
 
@@ -77,36 +68,35 @@ async function setToStorage(id, value) {
 
   let wasActive = new Set();
 
-  browser.tabs.onUpdated.addListener(
-    (tabId, changeInfo, tab) => {
-      // ignore
-      if (
-        !(
-          tab.active ||
-          tab.hidden ||
-          tab.discarded ||
-          wasActive.has(tabId) ||
-          manually_disabled ||
-          !changeInfo.url.startsWith("http")
-        )
-      ) {
-        const mre = matchesRegEx(tab.url);
+  browser.webRequest.onBeforeRequest.addListener(
+    (requestDetails) => {
+      if (!manually_disabled) {
+        if (!wasActive.has(requestDetails.tabId)) {
+          console.debug(requestDetails.url, requestDetails.originUrl);
+          const mre = matchesRegEx(
+            typeof requestDetails.originUrl === "undefined"
+              ? requestDetails.url
+              : requestDetails.originUrl,
+          );
 
-        if (
-          (mode && mre) || // blacklist(true) => matches are not allowed to load
-          (!mode && !mre) // whitelist(false) => matches are allowed to load <=> no match => not allowed
-        ) {
-          browser.tabs.discard(tabId);
-          // console.debug("discarded", tab.url);
+          if (
+            (mode && mre) || // blacklist(true) => matches are not allowed to load
+            (!mode && !mre) // whitelist(false) => matches are allowed to load <=> no match => not allowed
+          ) {
+            return { cancel: true };
+          }
+          wasActive.add(requestDetails.tabId); // not really, but lets treat it like it has been activated , that should make things easier
         }
       }
     },
-    { properties: ["url"] },
+    { urls: ["<all_urls>"], types: ["main_frame"] },
+    ["blocking"],
   );
 
   browser.tabs.onActivated.addListener((activeInfo) => {
     if (!wasActive.has(activeInfo.tabId)) {
       wasActive.add(activeInfo.tabId);
+      browser.tabs.reload(activeInfo.tabId);
     }
   });
 
@@ -141,10 +131,5 @@ async function setToStorage(id, value) {
 browser.runtime.onInstalled.addListener(async (details) => {
   if (details.reason === "install") {
     browser.runtime.openOptionsPage();
-  } else {
-    // Migrate old data
-    let tmp = await getFromStorage("object", "selectors", []);
-    tmp = tmp.map((e) => e.url_regex).join("\n");
-    await setToStorage("matchers", tmp);
   }
 });

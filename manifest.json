@@ -12,10 +12,16 @@
     "128": "icon.png"
   },
   "manifest_version": 2,
-  "name": "Load Background Tabs On Select",
+  "name": "Dont Load Background Tabs",
   "options_ui": {
     "page": "options.html"
   },
-  "permissions": ["storage", "tabs"],
-  "version": "1.2.12"
+  "permissions": [
+    "storage",
+    "tabs",
+    "webRequest",
+    "webRequestBlocking",
+    "<all_urls>"
+  ],
+  "version": "1.0.0"
 }
