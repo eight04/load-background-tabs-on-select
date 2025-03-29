@@ -75,34 +75,73 @@ async function setToStorage(id, value) {
 
   // -------------------------------
 
-  let wasActive = new Set();
-
-  browser.tabs.onUpdated.addListener(
-    (tabId, changeInfo, tab) => {
-      // ignore
-      if (
-        !(
-          tab.active ||
-          tab.hidden ||
-          tab.discarded ||
-          wasActive.has(tabId) ||
-          manually_disabled ||
-          !changeInfo.url.startsWith("http")
-        )
-      ) {
-        const mre = matchesRegEx(tab.url);
-
-        if (
-          (mode && mre) || // blacklist(true) => matches are not allowed to load
-          (!mode && !mre) // whitelist(false) => matches are allowed to load <=> no match => not allowed
-        ) {
-          browser.tabs.discard(tabId);
-          // console.debug("discarded", tab.url);
-        }
+  class ObservedSet extends Set {
+    constructor() {
+      super();
+      this._waiters = new Map(); // id => {promise, resolve}
+    }
+    add(id) {
+      super.add(id);
+      if (this._waiters.has(id)) {
+        this._waiters.get(id).resolve();
+        this._waiters.delete(id);
       }
-    },
-    { properties: ["url"] },
-  );
+    }
+    delete(id) {
+      super.delete(id);
+      if (this._waiters.has(id)) {
+        this._waiters.delete(id);
+      }
+    }
+    waitUntilHas(id) {
+      if (this.has(id)) {
+        return Promise.resolve();
+      }
+      if (!this._waiters.has(id)) {
+        let resolve;
+        let promise = new Promise((r) => {
+          resolve = r;
+        });
+        this._waiters.set(id, { promise, resolve });
+      }
+      return this._waiters.get(id).promise;
+    }
+  }
+
+  let wasActive = new ObservedSet();
+
+  function shouldDiscard(tab) {
+    // ignore
+    if (
+      !(
+        tab.active ||
+        tab.hidden ||
+        tab.discarded ||
+        wasActive.has(tab.id) ||
+        manually_disabled ||
+        !tab.url.startsWith("http")
+      )
+    ) {
+      const mre = matchesRegEx(tab.url);
+
+      if (
+        (mode && mre) || // blacklist(true) => matches are not allowed to load
+        (!mode && !mre) // whitelist(false) => matches are allowed to load <=> no match => not allowed
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // browser.tabs.onUpdated.addListener(
+  //   (tabId, changeInfo, tab) => {
+  //     if (shouldDiscard(tab)) {
+  //       browser.tabs.discard(tabId);
+  //     }
+  //   },
+  //   { properties: ["url"] },
+  // );
 
   browser.tabs.onActivated.addListener((activeInfo) => {
     if (!wasActive.has(activeInfo.tabId)) {
@@ -136,6 +175,21 @@ async function setToStorage(id, value) {
     setToStorage("manually_disabled", manually_disabled);
   });
   browser.browserAction.setTitle({ title: "Toggle tab background loading" });
+
+  // FIXME: use optional permissions
+  browser.webRequest.onBeforeRequest.addListener(
+    (details) => {
+      const tab = {
+        id: details.tabId,
+        url: details.documentUrl || details.originUrl || details.url
+      };
+      if (shouldDiscard(tab)) {
+        return wasActive.waitUntilHas(tab.id);
+      }
+    },
+    { urls: ["<all_urls>"], types: ["image", "imageset", "media", "object", "script", "sub_frame"] },
+    ["blocking"],
+  )
 })();
 
 browser.runtime.onInstalled.addListener(async (details) => {
