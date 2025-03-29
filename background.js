@@ -134,6 +134,7 @@ async function setToStorage(id, value) {
     return false;
   }
 
+  // FIXME: toggle discard method via options?
   // browser.tabs.onUpdated.addListener(
   //   (tabId, changeInfo, tab) => {
   //     if (shouldDiscard(tab)) {
@@ -183,6 +184,8 @@ async function setToStorage(id, value) {
         id: details.tabId,
         url: details.documentUrl || details.originUrl || details.url
       };
+      // FIXME: should verify we don't block requests that are not related to the tab
+      // e.g. requests from extensions
       if (shouldDiscard(tab)) {
         return wasActive.waitUntilHas(tab.id);
       }
