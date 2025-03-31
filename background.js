@@ -79,7 +79,6 @@ async function onStorageChange() {
     (requestDetails) => {
       if (!manually_disabled) {
         if (!wasActive.has(requestDetails.tabId)) {
-          console.debug(requestDetails.url, requestDetails.originUrl);
           const mre = matchesRegEx(
             typeof requestDetails.originUrl === "undefined"
               ? requestDetails.url
@@ -134,7 +133,7 @@ async function onStorageChange() {
     setToStorage("manually_disabled", manually_disabled);
   });
 
-  browser.tabs.onCreated.addListener(() => {
+  browser.tabs.onCreated.addListener((tab) => {
     if (tab.active) {
       wasActive.add(tab.id);
     }
