@@ -67,6 +67,7 @@ async function setToStorage(id, value) {
   // -------------------------------
 
   let wasActive = new Set();
+  let awaitsActivation = new Map();
 
   browser.webRequest.onBeforeRequest.addListener(
     (requestDetails) => {
@@ -83,20 +84,58 @@ async function setToStorage(id, value) {
             (mode && mre) || // blacklist(true) => matches are not allowed to load
             (!mode && !mre) // whitelist(false) => matches are allowed to load <=> no match => not allowed
           ) {
+            awaitsActivation.set(requestDetails.tabId, requestDetails.url);
             return { cancel: true };
+            // doenst work
+            //const redirectUrl = "wait.html?url=" + encodeURIComponent(requestDetails.url); doenst work
+            //console.debug('Redirecting to ', redirectUrl);
           }
           wasActive.add(requestDetails.tabId); // not really, but lets treat it like it has been activated , that should make things easier
         }
       }
     },
-    { urls: ["<all_urls>"], types: ["main_frame"] },
+    { urls: ["<all_urls>"], types: ["main_frame"] }, // blocking the main_frame seems sufficient and keeping it simple is always nice
     ["blocking"],
   );
 
-  browser.tabs.onActivated.addListener((activeInfo) => {
+  browser.tabs.onActivated.addListener(async (activeInfo) => {
     if (!wasActive.has(activeInfo.tabId)) {
       wasActive.add(activeInfo.tabId);
-      browser.tabs.reload(activeInfo.tabId);
+
+      // doenst work => BUG ?
+      // Canceling the request doenst seem to set the URL but it stays about:blank
+      // even if the url is displayed in thte URL bar ... very strange
+      /*
+        setTimeout(async () => {
+            const atab = await browser.tabs.get(activeInfo.tabId);
+
+
+            console.debug(atab.url);
+            browser.tabs.reload(activeInfo.tabId);
+
+        }, 3000);
+        */
+
+      // doenst work
+      //const atab = await browser.tabs.get(activeInfo.tabId);
+      //let tmp = new URL(atab.url).searchParams;
+      //let url = decodeURIComponent(tmp.get("url"));
+
+      /**/
+      if (awaitsActivation.has(activeInfo.tabId)) {
+        //console.debug("updating tab with url");
+        browser.tabs.update(activeInfo.tabId, {
+          url: awaitsActivation.get(activeInfo.tabId),
+        });
+        awaitsActivation.delete(activeInfo.tabId);
+      }
+      /**/
+
+      // doenst work
+      /*browser.tabs.executeScript({
+    code: `console.log('location:', window.location.href);`,
+  });
+    */
     }
   });
 
@@ -104,6 +143,11 @@ async function setToStorage(id, value) {
     if (wasActive.has(tabId)) {
       wasActive.delete(tabId);
     }
+    /**/
+    if (awaitsActivation.has(tabId)) {
+      awaitsActivation.delete(tabId);
+    }
+    /**/
   });
 
   browser.storage.onChanged.addListener(onStorageChange);
@@ -133,3 +177,11 @@ browser.runtime.onInstalled.addListener(async (details) => {
     browser.runtime.openOptionsPage();
   }
 });
+
+function handleCreated(tab) {
+  if (tab.active) {
+    wasActive.add(tab.id);
+  }
+}
+
+browser.tabs.onCreated.addListener(handleCreated);
