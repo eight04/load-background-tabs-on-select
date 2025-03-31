@@ -69,6 +69,11 @@ async function onStorageChange() {
   // -------------------------------
   // setup
   // -------------------------------
+  const atabs = await browser.tabs.query({ active: true, currentWindow: true });
+  if (atabs.length > 0) {
+    wasActive.add(atabs[0].id);
+  }
+
   await onStorageChange();
 
   // -------------------------------
