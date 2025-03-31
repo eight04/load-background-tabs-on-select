@@ -109,10 +109,9 @@ async function onStorageChange() {
           doc.title +
           "</title></head><body>please wait ...</body></html>";
         filter.write(encoder.encode(str));
-        filter.disconnect();
+        filter.close();
       };
-
-      return {};
+      return;
     }
     // not really, but lets treat it like it has been activated
     wasActive.add(requestDetails.tabId);
