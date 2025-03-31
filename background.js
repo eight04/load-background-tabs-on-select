@@ -2,7 +2,9 @@
 
 let manually_disabled = false;
 let wasActive = new Set();
-let awaitsActivation = new Map();
+let decoder = new TextDecoder("utf-8");
+let encoder = new TextEncoder();
+let parser = new DOMParser();
 
 async function getFromStorage(type, id, fallback) {
   let tmp = await browser.storage.local.get(id);
@@ -75,43 +77,58 @@ async function onStorageChange() {
 
   browser.storage.onChanged.addListener(onStorageChange);
 
-  browser.webRequest.onBeforeRequest.addListener(
-    (requestDetails) => {
-      if (!manually_disabled) {
-        if (!wasActive.has(requestDetails.tabId)) {
-          const mre = matchesRegEx(
-            typeof requestDetails.originUrl === "undefined"
-              ? requestDetails.url
-              : requestDetails.originUrl,
-          );
+  async function listener(requestDetails) {
+    if (manually_disabled) {
+      return;
+    }
+    if (wasActive.has(requestDetails.tabId)) {
+      return;
+    }
+    const mre = matchesRegEx(
+      typeof requestDetails.originUrl === "undefined"
+        ? requestDetails.url
+        : requestDetails.originUrl,
+    );
 
-          if (
-            (mode && mre) || // blacklist(true) => matches are not allowed to load
-            (!mode && !mre) // whitelist(false) => matches are allowed to load <=> no match => not allowed
-          ) {
-            awaitsActivation.set(requestDetails.tabId, requestDetails.url);
-            return { cancel: true };
-          }
-          // not really, but lets treat it like it has been activated
-          wasActive.add(requestDetails.tabId);
-        }
-      }
-    },
-    // blocking the main_frame seems sufficient
+    if (
+      (mode && mre) || // blacklist(true) => matches are not allowed to load
+      (!mode && !mre) // whitelist(false) => matches are allowed to load <=> no match => not allowed
+    ) {
+      // Instead of canceling the request, we just rewrite the response
+      // we still get the Title, but the actual data that is rendered is keeped to basically nothing
+      // which requires less resources
+      let filter = await browser.webRequest.filterResponseData(
+        requestDetails.requestId,
+      );
+
+      filter.ondata = (event) => {
+        let str = decoder.decode(event.data, { stream: true });
+        const doc = parser.parseFromString(str, "text/html");
+        str =
+          "<!doctype html><head><title>" +
+          doc.title +
+          "</title></head><body>please wait ...</body></html>";
+        filter.write(encoder.encode(str));
+        filter.disconnect();
+      };
+
+      return {};
+    }
+    // not really, but lets treat it like it has been activated
+    wasActive.add(requestDetails.tabId);
+  }
+
+  browser.webRequest.onBeforeRequest.addListener(
+    listener,
     { urls: ["<all_urls>"], types: ["main_frame"] },
     ["blocking"],
   );
 
+  // ----
   browser.tabs.onActivated.addListener(async (activeInfo) => {
     if (!wasActive.has(activeInfo.tabId)) {
       wasActive.add(activeInfo.tabId);
-      // reload doenst work so we use this instead for now
-      if (awaitsActivation.has(activeInfo.tabId)) {
-        browser.tabs.update(activeInfo.tabId, {
-          url: awaitsActivation.get(activeInfo.tabId),
-        });
-        awaitsActivation.delete(activeInfo.tabId);
-      }
+      browser.tabs.reload(activeInfo.tabId);
     }
   });
 
@@ -119,17 +136,10 @@ async function onStorageChange() {
     if (wasActive.has(tabId)) {
       wasActive.delete(tabId);
     }
-    if (awaitsActivation.has(tabId)) {
-      awaitsActivation.delete(tabId);
-    }
   });
 
   browser.browserAction.onClicked.addListener(() => {
-    if (manually_disabled) {
-      manually_disabled = false;
-    } else {
-      manually_disabled = true;
-    }
+    manually_disabled = !manually_disabled;
     setToStorage("manually_disabled", manually_disabled);
   });
 
