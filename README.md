@@ -6,7 +6,8 @@ Prevents background tabs from loading until they have been manually activated
 
 <b>Short Demo Video:</b>
 
-https://github.com/igorlogius/load-background-tabs-on-select/assets/67047467/83c02d4c-5da8-453f-90f5-5ee2a5e8d60c
+[screen-20250331-152257.webm](https://github.com/user-attachments/assets/3b812e31-67ff-4eb8-ba2d-bd9d72f49f56)
+
 
 The inital reason to creating this addon, was so i could "CTRL+Click" on one of
 my bookmark folders which contain (quite a few) bookmarks and the containing
