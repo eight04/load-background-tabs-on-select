@@ -5,6 +5,7 @@ let wasActive = new Set();
 let decoder = new TextDecoder("utf-8");
 let encoder = new TextEncoder();
 let parser = new DOMParser();
+const body_text = "please wait...";
 
 async function getFromStorage(type, id, fallback) {
   let tmp = await browser.storage.local.get(id);
@@ -82,7 +83,7 @@ async function onStorageChange() {
 
   browser.storage.onChanged.addListener(onStorageChange);
 
-  async function listener(requestDetails) {
+  async function onBeforeRequest(requestDetails) {
     if (manually_disabled) {
       return;
     }
@@ -100,8 +101,9 @@ async function onStorageChange() {
       (!mode && !mre) // whitelist(false) => matches are allowed to load <=> no match => not allowed
     ) {
       // Instead of canceling the request, we just rewrite the response
-      // we still get the Title, but the actual data that is rendered is keeped to basically nothing
-      // which requires less resources
+      // this way we still get the title,
+      // the resources that a tab will allocate should be close to nothing
+      // and it should have a stable/reloadable state
       let filter = await browser.webRequest.filterResponseData(
         requestDetails.requestId,
       );
@@ -109,13 +111,12 @@ async function onStorageChange() {
       filter.ondata = (event) => {
         let str = decoder.decode(event.data, { stream: true });
         const doc = parser.parseFromString(str, "text/html");
-        str =
-          "<!doctype html><head><title>" +
-          doc.title +
-          "</title></head><body>please wait ...</body></html>";
+        str = `<!doctype html><head><title>${doc.title}</title></head><body>${body_text}<body></html>`;
+        //console.debug(str);
         filter.write(encoder.encode(str));
         filter.close();
       };
+      // dont add to wasActive here
       return;
     }
     // not really, but lets treat it like it has been activated
@@ -123,7 +124,7 @@ async function onStorageChange() {
   }
 
   browser.webRequest.onBeforeRequest.addListener(
-    listener,
+    onBeforeRequest,
     { urls: ["<all_urls>"], types: ["main_frame"] },
     ["blocking"],
   );
@@ -131,8 +132,25 @@ async function onStorageChange() {
   // ----
   browser.tabs.onActivated.addListener(async (activeInfo) => {
     if (!wasActive.has(activeInfo.tabId)) {
+      // mark first
       wasActive.add(activeInfo.tabId);
-      browser.tabs.reload(activeInfo.tabId);
+
+      // before we reload, do an extra test
+      // to make sure we dont accidentally reload an already loaded tab
+      try {
+        const tmp = await browser.tabs.executeScript(activeInfo.tabId, {
+          code: `document.body.innerText`,
+        });
+        if (
+          tmp.length === 1 &&
+          typeof tmp[0] === "string" &&
+          tmp[0] === body_text
+        ) {
+          browser.tabs.reload(activeInfo.tabId);
+        }
+      } catch (e) {
+        console.error(e); //
+      }
     }
   });
 
