@@ -2,10 +2,10 @@
 
 let manually_disabled = false;
 let wasActive = new Set();
+
 let decoder = new TextDecoder("utf-8");
 let encoder = new TextEncoder();
 let parser = new DOMParser();
-const body_text = "please wait...";
 
 async function getFromStorage(type, id, fallback) {
   let tmp = await browser.storage.local.get(id);
@@ -68,11 +68,10 @@ async function onStorageChange() {
 
 (async () => {
   // -------------------------------
-  // setup
+  // inital setup
   // -------------------------------
-  const atabs = await browser.tabs.query({ active: true, currentWindow: true });
-  if (atabs.length > 0) {
-    wasActive.add(atabs[0].id);
+  for (const atab of await browser.tabs.query({ active: true })) {
+    wasActive.add(atab.id);
   }
 
   await onStorageChange();
@@ -87,9 +86,17 @@ async function onStorageChange() {
     if (manually_disabled) {
       return;
     }
+
     if (wasActive.has(requestDetails.tabId)) {
       return;
     }
+
+    const reqTab = await browser.tabs.get(requestDetails.tabId);
+    if (reqTab.active) {
+      wasActive.add(requestDetails.tabId);
+      return;
+    }
+
     const mre = matchesRegEx(
       typeof requestDetails.originUrl === "undefined"
         ? requestDetails.url
@@ -111,13 +118,8 @@ async function onStorageChange() {
       filter.ondata = (event) => {
         let str = decoder.decode(event.data, { stream: true });
         const doc = parser.parseFromString(str, "text/html");
-        str = `<!doctype html><head><title>${doc.title}</title>
-<script>
-window.addEventListener("focus", () => {
-    document.location.reload();
-});
-</script>
-</head><body>${body_text}<body></html>`;
+        str = `<!doctype html><head><title>${doc.title}</title></head><body></body>
+</html>`;
         //console.debug(str);
         filter.write(encoder.encode(str));
         filter.close();
@@ -139,6 +141,18 @@ window.addEventListener("focus", () => {
   browser.tabs.onActivated.addListener(async (activeInfo) => {
     if (!wasActive.has(activeInfo.tabId)) {
       wasActive.add(activeInfo.tabId);
+
+      let aTab = await browser.tabs.get(activeInfo.tabId);
+      if (aTab.url.startsWith("http")) {
+        browser.tabs.update(activeInfo.tabId, { url: aTab.url });
+      } else {
+        setTimeout(async () => {
+          aTab = await browser.tabs.get(activeInfo.tabId);
+          if (aTab.url.startsWith("http")) {
+            browser.tabs.update(activeInfo.tabId, { url: aTab.url });
+          }
+        }, 5000); // this is a crude fallback so lets be a bit generous and let the tab settle
+      }
     }
   });
 
