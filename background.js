@@ -111,7 +111,13 @@ async function onStorageChange() {
       filter.ondata = (event) => {
         let str = decoder.decode(event.data, { stream: true });
         const doc = parser.parseFromString(str, "text/html");
-        str = `<!doctype html><head><title>${doc.title}</title></head><body>${body_text}<body></html>`;
+        str = `<!doctype html><head><title>${doc.title}</title>
+<script>
+window.addEventListener("focus", () => {
+    document.location.reload();
+});
+</script>
+</head><body>${body_text}<body></html>`;
         //console.debug(str);
         filter.write(encoder.encode(str));
         filter.close();
@@ -132,25 +138,7 @@ async function onStorageChange() {
   // ----
   browser.tabs.onActivated.addListener(async (activeInfo) => {
     if (!wasActive.has(activeInfo.tabId)) {
-      // mark first
       wasActive.add(activeInfo.tabId);
-
-      // before we reload, do an extra test
-      // to make sure we dont accidentally reload an already loaded tab
-      try {
-        const tmp = await browser.tabs.executeScript(activeInfo.tabId, {
-          code: `document.body.innerText`,
-        });
-        if (
-          tmp.length === 1 &&
-          typeof tmp[0] === "string" &&
-          tmp[0] === body_text
-        ) {
-          browser.tabs.reload(activeInfo.tabId);
-        }
-      } catch (e) {
-        console.error(e); //
-      }
     }
   });
 
