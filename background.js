@@ -85,6 +85,9 @@ async function onStorageChange() {
     if (wasActive.has(tabId)) {
       wasActive.delete(tabId);
     }
+    if (awaitsReload.has(tabId)) {
+      awaitsReload.delete(tabId);
+    }
   });
 
   browser.browserAction.onClicked.addListener(() => {
