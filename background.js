@@ -161,6 +161,7 @@ async function onStorageChange() {
           browser.tabs.update(activeInfo.tabId, {
             url: awaitsReload.get(activeInfo.tabId),
           });
+          awaitsReload.delete(activeInfo.tabId);
         }
       }, 2000); // 2secs seems fine ...
     }
