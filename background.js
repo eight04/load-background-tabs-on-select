@@ -1,6 +1,7 @@
 /* global browser */
 
 let manually_disabled = false;
+// TODO: merge two sets into a single `tabState` map
 let wasActive = new Set();
 let awaitsReload = new Map();
 
@@ -116,7 +117,7 @@ async function onStorageChange() {
 
               // NOTE: awaitsReload should always be set before the user is able to initalize a focus switch to the yet unfocused tab
               // no documentation seems to explicitly state that this has to be the case so this is an assumption currenlty only supported by tests
-              awaitsReload.set(e.tabId, e.url);
+              awaitsReload.set(e.tabId, {url: e.url, ready: false});
 
               let filter = await browser.webRequest.filterResponseData(
                 e.requestId,
@@ -156,14 +157,27 @@ async function onStorageChange() {
   browser.tabs.onActivated.addListener(async (activeInfo) => {
     if (!wasActive.has(activeInfo.tabId)) {
       wasActive.add(activeInfo.tabId);
-      setTimeout(() => {
-        if (awaitsReload.has(activeInfo.tabId)) {
-          browser.tabs.update(activeInfo.tabId, {
-            url: awaitsReload.get(activeInfo.tabId),
-          });
-          awaitsReload.delete(activeInfo.tabId);
-        }
-      }, 2000); // 2secs seems fine ...
+      if (awaitsReload.get(activeInfo.tabId)?.ready) {
+        browser.tabs.update(activeInfo.tabId, {
+          url: awaitsReload.get(activeInfo.tabId).url,
+        });
+        awaitsReload.delete(activeInfo.tabId);
+      }
+    }
+  });
+
+  browser.runtime.onMessage.addListener((message, sender) => {
+    if (message.action === "dummy-ready") {
+      if (awaitsReload.has(sender.tab.id)) {
+        awaitsReload.get(sender.tab.id).ready = true;
+      }
+      if (wasActive.has(sender.tab.id)) {
+        // if the tab is already active, we can reload it immediately
+        browser.tabs.update(sender.tab.id, {
+          url: awaitsReload.get(sender.tab.id).url,
+        });
+        awaitsReload.delete(sender.tab.id);
+      }
     }
   });
 })();
