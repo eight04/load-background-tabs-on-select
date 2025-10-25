@@ -1,0 +1,24 @@
+{
+  "name": "load-background-tabs-on-select",
+  "version": "1.2.12",
+  "description": "Prevents tabs which are opend in the background from loading until they have been manually activated once",
+  "homepage": "https://github.com/eight04/load-background-tabs-on-select#readme",
+  "bugs": {
+    "url": "https://github.com/eight04/load-background-tabs-on-select/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eight04/load-background-tabs-on-select.git"
+  },
+  "license": "BSD-2-Clause",
+  "author": "",
+  "type": "module",
+  "main": "background.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "web-ext build --overwrite-dest"
+  },
+  "devDependencies": {
+    "web-ext": "^9.1.0"
+  }
+}
