@@ -110,6 +110,14 @@ async function setToStorage(id, value) {
 
   let wasActive = new ObservedSet();
 
+  browser.tabs.query({}).then((tabs) => {
+    for (let i = 0; i < tabs.length; i++) {
+      if (tabs[i].active) {
+        wasActive.add(tabs[i].id);
+      }
+    }
+  });
+
   function shouldDiscard(tab) {
     // ignore privileged tabs (extensions, about:*)
     if (tab.id < 0) return false;
