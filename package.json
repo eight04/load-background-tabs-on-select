@@ -16,9 +16,11 @@
   "main": "background.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "web-ext build --overwrite-dest"
+    "prebuild": "shx rm -rf web-ext-artifacts/*",
+    "build": "web-ext build"
   },
   "devDependencies": {
+    "shx": "^0.4.0",
     "web-ext": "^9.1.0"
   }
 }
