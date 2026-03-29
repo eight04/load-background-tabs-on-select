@@ -55,17 +55,16 @@ async function setToStorage(id, value) {
       false,
     );
     if (!manually_disabled) {
-      //
       browser.browserAction.setBadgeText({ text: "on" });
       browser.browserAction.setBadgeBackgroundColor({
         color: [0, 115, 0, 115],
       });
     } else {
-      //
       browser.browserAction.setBadgeText({ text: "off" });
       browser.browserAction.setBadgeBackgroundColor({
         color: [115, 0, 0, 115],
       });
+      resolveAllWaiters();
     }
     mode = await getMode();
     regexList = await getRegexList();
@@ -105,6 +104,12 @@ async function setToStorage(id, value) {
         this._waiters.set(id, { promise, resolve });
       }
       return this._waiters.get(id).promise;
+    }
+    resolveAllWaiters() {
+      for (let { resolve } of this._waiters.values()) {
+        resolve();
+      }
+      this._waiters.clear();
     }
   }
 
