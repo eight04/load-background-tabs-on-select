@@ -64,13 +64,12 @@ async function setToStorage(id, value) {
       browser.browserAction.setBadgeBackgroundColor({
         color: [115, 0, 0, 115],
       });
-      resolveAllWaiters();
+      wasActive.resolveAllWaiters();
     }
     mode = await getMode();
     regexList = await getRegexList();
   }
 
-  await onStorageChange();
 
   // -------------------------------
 
@@ -114,6 +113,8 @@ async function setToStorage(id, value) {
   }
 
   let wasActive = new ObservedSet();
+
+  await onStorageChange();
 
   browser.tabs.query({}).then((tabs) => {
     for (let i = 0; i < tabs.length; i++) {
